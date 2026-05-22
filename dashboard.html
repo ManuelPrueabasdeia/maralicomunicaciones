@@ -114,14 +114,25 @@
 
         onAuthStateChanged(async (user) => {
             if (user) {
-                currentUser = user;
-                const userData = await getUserData(user.uid);
-                
-                document.getElementById('userName').textContent = userData?.nombre_completo || 'Usuario';
-                document.getElementById('userEmail').textContent = userData?.email || '';
+                try {
+                    currentUser = user;
+                    const userData = await getUserData(user.uid);
+                    
+                    if (userData) {
+                        document.getElementById('userName').textContent = userData.nombre_completo || 'Usuario';
+                        document.getElementById('userEmail').textContent = userData.email || '';
+                    } else {
+                        document.getElementById('userName').textContent = user.displayName || 'Usuario';
+                        document.getElementById('userEmail').textContent = user.email || '';
+                    }
 
-                // Cargar primer módulo
-                if (!currentModule) {
+                    // Cargar primer módulo
+                    if (!currentModule) {
+                        loadModule('home');
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos del usuario:', error);
+                    document.getElementById('userName').textContent = 'Usuario';
                     loadModule('home');
                 }
             } else {
@@ -139,29 +150,44 @@
                 document.querySelectorAll('.nav-item').forEach(item => {
                     item.classList.remove('active');
                 });
-                event.target.closest('.nav-item')?.classList.add('active');
-
-                // Cargar módulo
-                const response = await fetch(`js/modules/${moduleName}.js`, {
-                    type: 'module'
+                
+                // Encontrar y activar el botón correcto
+                const navButtons = document.querySelectorAll('.nav-item');
+                navButtons.forEach(btn => {
+                    if (btn.textContent.toLowerCase().includes(moduleName.toLowerCase())) {
+                        btn.classList.add('active');
+                    }
                 });
 
-                if (!response.ok) {
-                    showAlert('error', `Módulo no encontrado: ${moduleName}`);
+                // Cargar módulo
+                const { render } = await import(`./js/modules/${moduleName}.js`);
+                const container = document.getElementById('moduleContainer');
+                
+                if (!container) {
+                    console.error('Contenedor de módulo no encontrado');
                     return;
                 }
 
-                // Importar módulo dinámicamente
-                const { render } = await import(`./js/modules/${moduleName}.js`);
-                const container = document.getElementById('moduleContainer');
                 container.innerHTML = '';
 
-                // Renderizar módulo
+                // Renderizar módulo con manejo de errores
+                if (!currentUser) {
+                    showAlert('error', 'Usuario no autenticado');
+                    return;
+                }
+
                 await render(container, currentUser);
 
             } catch (error) {
                 console.error('Error cargando módulo:', error);
-                showAlert('error', 'Error al cargar el módulo');
+                const container = document.getElementById('moduleContainer');
+                if (container) {
+                    container.innerHTML = `<div style="padding: 20px; color: #c00;">
+                        <h3>Error al cargar el módulo</h3>
+                        <p>${error.message || 'Error desconocido'}</p>
+                        <button onclick="loadModule('home')" class="btn-primary" style="margin-top: 10px;">Volver al Inicio</button>
+                    </div>`;
+                }
             }
         };
 

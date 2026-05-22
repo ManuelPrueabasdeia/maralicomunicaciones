@@ -23,6 +23,10 @@ await setPersistence(auth, browserLocalPersistence)
  */
 export async function registerUser(email, password, nombre) {
     try {
+        if (!email || !password || !nombre) {
+            throw new Error('Todos los campos son requeridos');
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
@@ -43,7 +47,8 @@ export async function registerUser(email, password, nombre) {
 
         return user;
     } catch (error) {
-        throw new Error(parseFirebaseError(error.code));
+        const message = parseFirebaseError(error.code) || error.message || 'Error al crear cuenta';
+        throw new Error(message);
     }
 }
 
@@ -52,23 +57,35 @@ export async function registerUser(email, password, nombre) {
  */
 export async function loginUser(usuario, contraseña) {
     try {
+        if (!usuario || !contraseña) {
+            throw new Error('Usuario y contraseña son requeridos');
+        }
+
         // Buscar usuario por nombre de usuario en Firestore
         const usersRef = collection(db, 'usuarios');
         const q = query(usersRef, where('usuario', '==', usuario));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-            throw new Error('Usuario no encontrado');
+            throw new Error('Usuario o contraseña incorrectos');
         }
 
         const userData = querySnapshot.docs[0].data();
         const email = userData.email;
 
         // Login con email y contraseña
-        await signInWithEmailAndPassword(auth, email, contraseña);
-        return auth.currentUser;
+        try {
+            await signInWithEmailAndPassword(auth, email, contraseña);
+            return auth.currentUser;
+        } catch (authError) {
+            if (authError.code === 'auth/wrong-password' || authError.code === 'auth/user-not-found') {
+                throw new Error('Usuario o contraseña incorrectos');
+            }
+            throw new Error(parseFirebaseError(authError.code) || authError.message);
+        }
     } catch (error) {
-        throw new Error(parseFirebaseError(error.code));
+        console.error('Error de autenticación:', error);
+        throw new Error(error.message || 'Error al iniciar sesión');
     }
 }
 
@@ -112,10 +129,14 @@ export async function getUserData(uid) {
  */
 export async function resetPassword(email) {
     try {
+        if (!email) {
+            throw new Error('El correo es requerido');
+        }
         await sendPasswordResetEmail(auth, email);
         return { success: true, message: 'Se envió un enlace de recuperación a tu correo' };
     } catch (error) {
-        throw new Error(parseFirebaseError(error.code));
+        const message = parseFirebaseError(error.code) || error.message || 'Error al enviar correo de recuperación';
+        throw new Error(message);
     }
 }
 
@@ -124,45 +145,75 @@ export async function resetPassword(email) {
  */
 export async function createDemoUsers() {
     try {
+        // Verificar si ya existe el usuario demo
         const usersRef = collection(db, 'usuarios');
         const q = query(usersRef, where('usuario', '==', 'admin'));
         const querySnapshot = await getDocs(q);
 
-        if (querySnapshot.empty) {
-            console.log('Creando usuario demo...');
-            
-            // Crear usuario demo con Firebase Auth
-            try {
-                await createUserWithEmailAndPassword(
-                    auth,
-                    'admin@maralicomunicaciones.demo',
-                    'admin123'
-                );
-            } catch (error) {
-                if (error.code !== 'auth/email-already-in-use') {
-                    throw error;
+        if (!querySnapshot.empty) {
+            console.log('✓ Usuario demo ya existe');
+            return;
+        }
+
+        console.log('ℹ️ Creando usuario demo...');
+        
+        // Crear usuario demo con Firebase Auth
+        const demoEmail = 'admin@maralicomunicaciones.demo';
+        const demoPassword = 'admin123';
+        
+        let userCredential = null;
+        
+        try {
+            userCredential = await createUserWithEmailAndPassword(auth, demoEmail, demoPassword);
+            console.log('✓ Usuario de autenticación creado:', userCredential.user.uid);
+        } catch (authError) {
+            if (authError.code === 'auth/email-already-in-use') {
+                console.log('ℹ️ Email ya existe, intentando recuperar usuario...');
+                // Si el email ya existe, intentar login para obtener el uid
+                try {
+                    await signInWithEmailAndPassword(auth, demoEmail, demoPassword);
+                    userCredential = { user: auth.currentUser };
+                    console.log('✓ Usuario de autenticación recuperado');
+                } catch (signInError) {
+                    console.error('✗ Error al recuperar usuario:', signInError.message);
+                    return;
                 }
-            }
-
-            // Buscar el usuario actual
-            const adminUser = auth.currentUser;
-            if (adminUser) {
-                // Guardar datos en Firestore
-                await setDoc(doc(db, 'usuarios', adminUser.uid), {
-                    uid: adminUser.uid,
-                    email: 'admin@maralicomunicaciones.demo',
-                    nombre_completo: 'Administrador',
-                    usuario: 'admin',
-                    telefono: '+52 1 746 102 3929',
-                    fecha_creacion: new Date(),
-                    estado: 'activo'
-                });
-
-                console.log('Usuario demo creado correctamente');
+            } else {
+                console.error('✗ Error creando usuario de autenticación:', authError.message);
+                throw authError;
             }
         }
+
+        // Guardar datos del usuario en Firestore
+        if (userCredential && userCredential.user) {
+            const uid = userCredential.user.uid;
+            
+            // Verificar si ya existe en Firestore
+            const existingDoc = await getDoc(doc(db, 'usuarios', uid));
+            if (existingDoc.exists()) {
+                console.log('✓ Datos del usuario ya existen en Firestore');
+                return;
+            }
+
+            // Crear documento en Firestore
+            await setDoc(doc(db, 'usuarios', uid), {
+                uid: uid,
+                email: demoEmail,
+                nombre_completo: 'Administrador Demo',
+                usuario: 'admin',
+                telefono: '+52 1 746 102 3929',
+                fecha_creacion: new Date(),
+                estado: 'activo'
+            });
+
+            console.log('✓ Usuario demo creado correctamente en Firestore');
+            
+            // Logout para permitir nuevo login
+            await signOut(auth);
+            console.log('✓ Sesión cerrada - Puedes iniciar sesión con admin/admin123');
+        }
     } catch (error) {
-        console.log('Error creando usuarios demo:', error.message);
+        console.error('✗ Error creando usuarios demo:', error.message);
     }
 }
 
@@ -173,14 +224,22 @@ function parseFirebaseError(code) {
     const errors = {
         'auth/invalid-email': 'El correo no es válido',
         'auth/user-disabled': 'El usuario ha sido desactivado',
-        'auth/user-not-found': 'Usuario no encontrado',
-        'auth/wrong-password': 'Contraseña incorrecta',
+        'auth/user-not-found': 'Usuario o contraseña incorrectos',
+        'auth/wrong-password': 'Usuario o contraseña incorrectos',
         'auth/email-already-in-use': 'El correo ya está registrado',
         'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres',
         'auth/operation-not-allowed': 'Esta operación no está permitida',
-        'auth/too-many-requests': 'Demasiados intentos fallidos. Intenta más tarde'
+        'auth/too-many-requests': 'Demasiados intentos fallidos. Intenta más tarde',
+        'auth/network-request-failed': 'Error de conexión. Verifica tu internet',
+        'permission-denied': 'No tienes permisos para esta acción',
+        'not-found': 'Registro no encontrado'
     };
-    return errors[code] || 'Error de autenticación: ' + code;
+    
+    if (!code) {
+        return 'Ocurrió un error desconocido';
+    }
+    
+    return errors[code] || `Error: ${code}`;
 }
 
 /**

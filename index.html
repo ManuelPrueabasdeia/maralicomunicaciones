@@ -273,7 +273,7 @@
 
     <script type="module">
         import { auth } from './js/firebase-config.js';
-        import { loginUser, createDemoUsers } from './js/auth.js';
+        import { loginUser, createDemoUsers, resetPassword } from './js/auth.js';
 
         // Mostrar/ocultar formularios
         window.showRecoveryForm = () => {
@@ -299,6 +299,11 @@
             const usuario = document.getElementById('usuario').value.trim();
             const contraseña = document.getElementById('contraseña').value;
 
+            if (!usuario || !contraseña) {
+                showAlert('error', 'Por favor completa todos los campos');
+                return;
+            }
+
             const btnLogin = document.getElementById('btnLogin');
             const loginText = document.getElementById('loginText');
             const loginLoading = document.getElementById('loginLoading');
@@ -311,6 +316,7 @@
                 await loginUser(usuario, contraseña);
                 window.location.href = 'dashboard.html';
             } catch (error) {
+                console.error('Error de login:', error);
                 showAlert('error', error.message || 'Error al iniciar sesión');
             } finally {
                 btnLogin.disabled = false;
@@ -324,6 +330,11 @@
             e.preventDefault();
             const email = document.getElementById('recovery_email').value.trim();
 
+            if (!email) {
+                showAlert('error', 'Por favor ingresa tu correo');
+                return;
+            }
+
             const btnRecovery = document.getElementById('btnRecovery');
             const recoveryText = document.getElementById('recoveryText');
             const recoveryLoading = document.getElementById('recoveryLoading');
@@ -333,12 +344,13 @@
             recoveryLoading.style.display = 'inline-block';
 
             try {
-                const { sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js');
-                await sendPasswordResetEmail(auth, email);
+                await resetPassword(email);
                 showAlert('success', 'Se envió un enlace de recuperación a tu correo');
+                document.getElementById('recovery_email').value = '';
                 setTimeout(() => showLoginForm(), 2000);
             } catch (error) {
-                showAlert('error', 'Error: ' + error.message);
+                console.error('Error de recuperación:', error);
+                showAlert('error', error.message || 'Error al enviar correo de recuperación');
             } finally {
                 btnRecovery.disabled = false;
                 recoveryText.style.display = 'inline-block';
@@ -355,6 +367,9 @@
                 window.location.href = 'dashboard.html';
             }
         });
+
+        // Cargar herramientas de debug (opcional)
+        import('./js/debug.js').catch(err => console.log('Debug tools not loaded'));
     </script>
 </body>
 </html>
