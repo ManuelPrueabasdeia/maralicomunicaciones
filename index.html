@@ -272,8 +272,8 @@
     </div>
 
     <script type="module">
-        import { auth } from './js/firebase-config.js';
-        import { loginUser, createDemoUsers, resetPassword } from './js/auth.js';
+        import { auth } from './js/firebase-config.js?v=2';
+        import { loginUser, createDemoUsers, resetPassword } from './js/auth.js?v=3';
 
         // Mostrar/ocultar formularios
         window.showRecoveryForm = () => {
@@ -313,11 +313,20 @@
             loginLoading.style.display = 'inline-block';
 
             try {
+                console.log('📝 Intentando login...');
                 await loginUser(usuario, contraseña);
+                console.log('✓ Login exitoso, redirigiendo...');
                 window.location.href = 'dashboard.html';
             } catch (error) {
-                console.error('Error de login:', error);
-                showAlert('error', error.message || 'Error al iniciar sesión');
+                console.error('❌ Error de login:', error);
+                // Extraer mensaje de error de forma segura
+                let mensajeError = 'Error al iniciar sesión';
+                if (error && error.message) {
+                    mensajeError = error.message;
+                } else if (typeof error === 'string') {
+                    mensajeError = error;
+                }
+                showAlert('error', mensajeError);
             } finally {
                 btnLogin.disabled = false;
                 loginText.style.display = 'inline-block';
@@ -369,7 +378,7 @@
         });
 
         // Cargar herramientas de debug (opcional)
-        import('./js/debug.js').catch(err => console.log('Debug tools not loaded'));
+        import('./js/debug.js?v=1').catch(err => console.log('Debug tools not loaded'));
     </script>
 </body>
 </html>

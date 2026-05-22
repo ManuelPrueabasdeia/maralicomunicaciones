@@ -102,9 +102,9 @@
     </div>
 
     <script type="module">
-        import { auth, db } from './js/firebase-config.js';
-        import { logoutUser as firebaseLogout, getCurrentUser, getUserData, onAuthStateChanged } from './js/auth.js';
-        import { getDashboardStats } from './js/api.js';
+        import { auth, db } from './js/firebase-config.js?v=2';
+        import { logoutUser as firebaseLogout, getCurrentUser, getUserData, onAuthStateChanged } from './js/auth.js?v=3';
+        import { getDashboardStats } from './js/api.js?v=2';
 
         // Variables globales
         let currentUser = null;

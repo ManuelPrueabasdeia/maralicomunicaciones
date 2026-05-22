@@ -57,6 +57,8 @@ export async function registerUser(email, password, nombre) {
  */
 export async function loginUser(usuario, contraseña) {
     try {
+        console.log('🔐 Iniciando login para usuario:', usuario);
+        
         if (!usuario || !contraseña) {
             throw new Error('Usuario y contraseña son requeridos');
         }
@@ -67,25 +69,37 @@ export async function loginUser(usuario, contraseña) {
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
+            console.warn('⚠️ Usuario no encontrado:', usuario);
             throw new Error('Usuario o contraseña incorrectos');
         }
 
         const userData = querySnapshot.docs[0].data();
         const email = userData.email;
+        console.log('✓ Usuario encontrado:', email);
 
         // Login con email y contraseña
         try {
+            console.log('🔑 Intentando autenticación con Firebase...');
             await signInWithEmailAndPassword(auth, email, contraseña);
+            console.log('✓ Autenticación exitosa');
             return auth.currentUser;
         } catch (authError) {
+            console.error('✗ Error de autenticación:', authError.code, authError.message);
             if (authError.code === 'auth/wrong-password' || authError.code === 'auth/user-not-found') {
                 throw new Error('Usuario o contraseña incorrectos');
             }
-            throw new Error(parseFirebaseError(authError.code) || authError.message);
+            throw new Error(parseFirebaseError(authError.code) || authError.message || 'Error en autenticación');
         }
     } catch (error) {
-        console.error('Error de autenticación:', error);
-        throw new Error(error.message || 'Error al iniciar sesión');
+        console.error('❌ Error de login:', error.message);
+        // Asegurar que siempre retornamos un mensaje significativo
+        if (error instanceof Error) {
+            throw error;
+        } else if (typeof error === 'string') {
+            throw new Error(error);
+        } else {
+            throw new Error('Error desconocido al iniciar sesión');
+        }
     }
 }
 
